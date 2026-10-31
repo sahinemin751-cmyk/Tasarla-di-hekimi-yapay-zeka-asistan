@@ -16,6 +16,10 @@ Loup kamerası ve radyografiyle hekime "ikinci göz" olacak asistanın ilk proto
 | Kalite kapısı | `dental_asistan/quality.py` | Bulanık, karanlık ve parlamalı kareleri eler |
 | Zamansal oylama | `dental_asistan/temporal.py` | Tek karede görülen tespiti yok sayar, tekrar edenleri teyit eder |
 
+## Ekran kartın yoksa: Colab ile eğit
+
+Modeli Google Colab'ın ücretsiz GPU'sunda eğitmek en kolay yol. [Defteri Colab'da aç](https://colab.research.google.com/github/sahinemin751-cmyk/Tasarla-di-hekimi-yapay-zeka-asistan/blob/main/notebooks/colab_egitim.ipynb), T4 GPU seç ve "Tümünü çalıştır" de. Veri indirme, hazırlama, eğitim ve test kendiliğinden yapılır; sonunda `best.pt` bilgisayarına iner. Kamera demosu ekran kartı olmadan da çalışır.
+
 ## Windows'ta kurulum
 
 1. [Python 3.11 veya 3.12](https://www.python.org/downloads/windows/) kur (kurulumda "Add python.exe to PATH" işaretli olsun).
