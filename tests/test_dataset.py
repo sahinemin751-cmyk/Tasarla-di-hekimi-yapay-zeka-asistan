@@ -51,7 +51,8 @@ def test_is_yolo_label(tmp_path):
 
 def test_find_samples_dedupes_and_pairs(raw):
     samples, warnings = find_samples(raw)
-    assert warnings == []
+    assert warnings[0] == "1 .txt dosyası YOLO etiketi olarak kabul edilmedi"  # notes.txt
+    assert "notes.txt" in warnings[1]
     by_stem = {s.image.stem: s for s in samples}
     assert len(by_stem) == 7
     s = by_stem["train_0"]
@@ -90,8 +91,34 @@ def test_write_yolo_dataset(raw, tmp_path):
     out = tmp_path / "out"
     yaml_path = write_yolo_dataset(splits, out, ["caries"])
     assert (out / "images" / "train" / "train_0.jpg").exists()
-    assert (out / "labels" / "train" / "train_0.txt").read_text() == "0 0.5 0.5 0.2 0.2\n"
+    assert (out / "labels" / "train" / "train_0.txt").read_text() == "0 0.500000 0.500000 0.200000 0.200000\n"
     assert (out / "labels" / "train" / "unlabeled.txt").read_text() == ""
     text = yaml_path.read_text(encoding="utf-8")
     assert 'names:\n  0: "caries"' in text
     assert "train: images/train" in text
+
+
+def test_slight_overshoot_is_accepted_and_clipped(tmp_path):
+    root = tmp_path / "r"
+    _img(root / "images" / "a.jpg")
+    _touch(root / "labels" / "a.txt", "1 0.5 0.5 1.004 -0.001\n")
+    samples, _ = find_samples(root)
+    assert samples[0].label is not None
+    write_yolo_dataset({"train": samples, "val": [], "test": []}, tmp_path / "out", ["a", "b"])
+    assert (tmp_path / "out" / "labels" / "train" / "a.txt").read_text() == "1 0.500000 0.500000 1.000000 0.000000\n"
+
+
+def test_darknet_layout_case_insensitive_and_obj_names(tmp_path):
+    """Zenodo 'Dataset' yapısı: görüntüler ve Darknet etiketleri ayrı ağaçlarda."""
+    root = tmp_path / "Dataset"
+    _img(root / "Images" / "pilot" / "Frontal" / "IMG_01.JPG")
+    _img(root / "Images" / "pilot" / "Frontal" / "IMG_02.JPG")  # etiketsiz (sağlıklı olabilir)
+    _touch(root / "Annotations" / "Darknet_YOLO" / "pilot" / "Frontal" / "img_01.txt", "0 0.1 0.1 0.1 0.1\n")
+    _touch(root / "Annotations" / "Darknet_YOLO" / "pilot" / "Frontal" / "IMG_99.txt", "0 0.1 0.1 0.1 0.1\n")
+    _touch(root / "Annotations" / "Darknet_YOLO" / "obj.names", "caries\nsecondary caries\n")
+    samples, warnings = find_samples(root)
+    by_name = {s.image.name: s for s in samples}
+    assert by_name["IMG_01.JPG"].label is not None
+    assert by_name["IMG_02.JPG"].label is None
+    assert any("1 etiket dosyasının aynı adlı görüntüsü yok" in w for w in warnings)
+    assert find_class_names(root) == ["caries", "secondary caries"]

@@ -35,23 +35,47 @@ class Sample:
     split: str | None  # klasör adından bulunan ayrım, yoksa None
 
 
-def is_yolo_label(path: Path) -> bool:
-    """Dosya YOLO formatında mı: her satır 'sınıf cx cy w h' (0-1 arası)."""
+COORD_TOLERANCE = 0.02  # yuvarlama yüzünden 1'i hafifçe aşan koordinatlar kabul edilir, yazarken kırpılır
+CLASS_NAME_FILES = ("classes.txt", "obj.names", "_darknet.labels")
+
+
+def yolo_label_problem(path: Path) -> str | None:
+    """Dosya YOLO etiketi değilse nedenini, geçerliyse None döndürür.
+
+    Biçim: her satır 'sınıf cx cy w h' (0-1 arası); poligon satırları da kabul.
+    """
     try:
         lines = [ln.split() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    except (UnicodeDecodeError, OSError):
-        return False
-    for parts in lines:
+    except (UnicodeDecodeError, OSError) as exc:
+        return f"okunamadı ({type(exc).__name__})"
+    for no, parts in enumerate(lines, 1):
         if len(parts) < 5:
-            return False
+            return f"satır {no}: 5'ten az değer"
         try:
             cls = float(parts[0])
             coords = [float(p) for p in parts[1:]]
         except ValueError:
-            return False
-        if cls < 0 or cls != int(cls) or any(c < 0 or c > 1 for c in coords):
-            return False
-    return True  # boş dosya = arka plan görüntüsü, geçerli
+            return f"satır {no}: sayı değil"
+        if cls < 0 or cls != int(cls):
+            return f"satır {no}: sınıf numarası geçersiz ({parts[0]})"
+        if any(c < -COORD_TOLERANCE or c > 1 + COORD_TOLERANCE for c in coords):
+            return f"satır {no}: koordinat 0-1 aralığında değil (piksel olabilir)"
+    return None  # boş dosya = arka plan görüntüsü, geçerli
+
+
+def is_yolo_label(path: Path) -> bool:
+    return yolo_label_problem(path) is None
+
+
+def _clipped_label_text(path: Path) -> str:
+    out = []
+    for ln in path.read_text(encoding="utf-8").splitlines():
+        parts = ln.split()
+        if not parts:
+            continue
+        coords = [min(1.0, max(0.0, float(p))) for p in parts[1:]]
+        out.append(" ".join([str(int(float(parts[0])))] + [f"{c:.6f}" for c in coords]))
+    return "\n".join(out) + ("\n" if out else "")
 
 
 def _split_from_path(path: Path) -> str | None:
@@ -82,14 +106,20 @@ def find_samples(root: Path) -> tuple[list[Sample], list[str]]:
     labels_by_stem: dict[str, list[Path]] = defaultdict(list)
     images_by_stem: dict[str, list[Path]] = defaultdict(list)
 
+    rejected: list[tuple[Path, str]] = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         suffix = path.suffix.lower()
+        key = path.stem.lower()  # IMG_1.JPG ile img_1.txt eşleşsin
         if suffix in IMAGE_EXTS:
-            images_by_stem[path.stem].append(path)
-        elif suffix == ".txt" and path.name.lower() != "classes.txt" and is_yolo_label(path):
-            labels_by_stem[path.stem].append(path)
+            images_by_stem[key].append(path)
+        elif suffix == ".txt" and path.name.lower() not in CLASS_NAME_FILES:
+            problem = yolo_label_problem(path)
+            if problem is None:
+                labels_by_stem[key].append(path)
+            else:
+                rejected.append((path, problem))
 
     samples: list[Sample] = []
     for stem, images in sorted(images_by_stem.items()):
@@ -107,15 +137,25 @@ def find_samples(root: Path) -> tuple[list[Sample], list[str]]:
                 warnings.append(f"'{stem}' farklı ayrımlarda birden çok kez var: {sorted(map(str, splits))}")
         samples.append(Sample(best_image, best_label, _split_from_path(best_image)))
 
+    if rejected:
+        warnings.append(f"{len(rejected)} .txt dosyası YOLO etiketi olarak kabul edilmedi")
+        for path, problem in rejected[:5]:
+            warnings.append(f"  {path.relative_to(root)}: {problem}")
+    image_keys = set(images_by_stem)
+    orphan = [p for key, paths in labels_by_stem.items() if key not in image_keys for p in paths]
+    if orphan:
+        warnings.append(f"{len(orphan)} etiket dosyasının aynı adlı görüntüsü yok, örn. {orphan[0].relative_to(root)}")
+
     return samples, warnings
 
 
 def find_class_names(root: Path) -> list[str] | None:
-    """classes.txt veya YOLO data.yaml içindeki sınıf adlarını bulur."""
-    for path in sorted(root.rglob("classes.txt")):
-        names = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        if names:
-            return names
+    """classes.txt, Darknet obj.names / _darknet.labels veya data.yaml'dan sınıf adlarını bulur."""
+    for filename in CLASS_NAME_FILES:
+        for path in sorted(root.rglob(filename)):
+            names = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            if names:
+                return names
     try:
         import yaml
     except ImportError:  # pragma: no cover
@@ -185,7 +225,7 @@ def write_yolo_dataset(
             shutil.copy2(s.image, img_dir / s.image.name)
             target = lbl_dir / f"{s.image.stem}.txt"
             if s.label is not None:
-                shutil.copy2(s.label, target)
+                target.write_text(_clipped_label_text(s.label), encoding="utf-8")
             else:
                 target.write_text("", encoding="utf-8")
 

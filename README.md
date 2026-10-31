@@ -37,10 +37,10 @@ pytest
 
 ## Kullanım
 
-**1. Veriyi indir ve hazırla.** [Zenodo 14827784](https://zenodo.org/records/14827784) sayfasından `Dataset.zip` dosyasını indir (1,6 GB), sonra:
+**1. Veriyi indir ve hazırla.** [Zenodo 14827784](https://zenodo.org/records/14827784) sayfasından `Benchmarking Dataset.zip` dosyasını indir (1,6 GB; yazarların train/valid/test ayrımlı sürümü), sonra:
 
 ```bat
-python scripts\prepare_caries_dataset.py --source C:\Users\<sen>\Downloads\Dataset.zip --out data\caries
+python scripts\prepare_caries_dataset.py --source "C:\Users\<sen>\Downloads\Benchmarking Dataset.zip" --out data\caries
 ```
 
 Betik arşivdeki YOLO etiketlerini kendisi bulur. Klasör adlarında train/val/test varsa o ayrımı korur, yoksa %80/%10/%10 böler.

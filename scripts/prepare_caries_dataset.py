@@ -1,8 +1,9 @@
 """Zenodo çürük veri setini (14827784) YOLO eğitimine hazırlar.
 
 Kullanım:
-    1. https://zenodo.org/records/14827784 adresinden "Dataset.zip" dosyasını indir.
-    2. python scripts/prepare_caries_dataset.py --source indirilenler/Dataset.zip --out data/caries
+    1. https://zenodo.org/records/14827784 adresinden "Benchmarking Dataset.zip" dosyasını indir
+       (yazarların train/valid/test ayrımlı sürümü; "Dataset.zip" de çalışır).
+    2. python scripts/prepare_caries_dataset.py --source "indirilenler/Benchmarking Dataset.zip" --out data/caries
 
 --source bir zip dosyası ya da zaten açılmış bir klasör olabilir.
 Lisans: CC BY 4.0. Yayında ve üründe kaynağa atıf yapılmalı (README'ye bak).
@@ -44,10 +45,10 @@ def main() -> int:
         source = extract_dir
 
     samples, warnings = find_samples(source)
-    for w in warnings[:20]:
+    for w in warnings[:30]:
         print("UYARI:", w)
-    if len(warnings) > 20:
-        print(f"UYARI: {len(warnings) - 20} uyarı daha var")
+    if len(warnings) > 30:
+        print(f"UYARI: {len(warnings) - 30} uyarı daha var")
 
     labeled = [s for s in samples if s.label is not None]
     unlabeled = len(samples) - len(labeled)
