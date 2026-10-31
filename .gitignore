@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+# Veri, eğitim çıktıları ve hasta görüntüleri asla depoya girmez
+data/
+runs/
+captures/
+*.pt
+*.onnx
+*.engine
