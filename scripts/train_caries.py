@@ -11,6 +11,7 @@ GPU'lu bir ortam önerilir.
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 
@@ -40,8 +41,14 @@ def main() -> int:
         seed=42,
     )
 
-    best = Path(model.trainer.save_dir) / "weights" / "best.pt"
-    print(f"En iyi ağırlıklar: {best}")
+    trained = Path(model.trainer.save_dir) / "weights" / "best.pt"
+    # Ultralytics sürüme göre farklı klasör kullanıyor (ör. runs/detect/runs/caries-2);
+    # demo ve README hep aynı yolu kullansın diye sabit bir yere kopyala.
+    best = Path("runs") / args.name / "weights" / "best.pt"
+    if trained.resolve() != best.resolve():
+        best.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(trained, best)
+    print(f"En iyi ağırlıklar: {best} (eğitim klasörü: {trained.parent.parent})")
 
     metrics = YOLO(str(best)).val(data=str(args.data), split="test", imgsz=args.imgsz, device=args.device)
     print("Test sonuçları:")
